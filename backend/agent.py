@@ -113,28 +113,62 @@ def run_kmap_agent(
 
     # If natural language prompt is provided without explicit grid inputs, extract parameters
     if user_prompt and (num_vars is None or minterms is None):
+        parsed = None
         if GENAI_AVAILABLE and api_key:
-            client = genai.Client(api_key=api_key)
-            extract_resp = client.models.generate_content(
-                model="gemini-2.5-flash",
-                contents=(
-                    "Extract num_vars (2, 3, or 4), minterms (list of ints), and dont_cares (list of ints) "
-                    f"from this digital logic request. Return ONLY valid JSON: {user_prompt}"
-                ),
-                config=types.GenerateContentConfig(response_mime_type="application/json"),
-            )
-            parsed = json.loads(extract_resp.text)
-            num_vars = int(parsed.get("num_vars", 4))
-            minterms = [int(x) for x in parsed.get("minterms", [])]
-            dont_cares = [int(x) for x in parsed.get("dont_cares", [])]
-            tool_trace.append(
-                {
-                    "tool": "extract_boolean_parameters",
-                    "input": {"prompt": user_prompt},
-                    "output": parsed,
+            try:
+                client = genai.Client(api_key=api_key)
+                extract_resp = client.models.generate_content(
+                    model="gemini-2.5-flash",
+                    contents=(
+                        "Extract num_vars (2, 3, or 4), minterms (list of integers), and "
+                        f"dont_cares (list of integers, empty list if none) from: {user_prompt}"
+                    ),
+                    config=types.GenerateContentConfig(
+                        response_mime_type="application/json",
+                        response_schema=types.Schema(
+                            type=types.Type.OBJECT,
+                            properties={
+                                "num_vars": types.Schema(type=types.Type.INTEGER),
+                                "minterms": types.Schema(
+                                    type=types.Type.ARRAY,
+                                    items=types.Schema(type=types.Type.INTEGER),
+                                ),
+                                "dont_cares": types.Schema(
+                                    type=types.Type.ARRAY,
+                                    items=types.Schema(type=types.Type.INTEGER),
+                                ),
+                            },
+                            required=["num_vars", "minterms", "dont_cares"],
+                        ),
+                    ),
+                )
+                raw_parsed = json.loads(extract_resp.text)
+                if isinstance(raw_parsed, list) and raw_parsed:
+                    raw_parsed = raw_parsed[0]
+                num_vars = max(2, min(4, int(raw_parsed.get("num_vars") or 4)))
+                minterms = [int(x) for x in (raw_parsed.get("minterms") or [])]
+                dont_cares = [int(x) for x in (raw_parsed.get("dont_cares") or [])]
+                parsed = {
+                    "num_vars": num_vars,
+                    "minterms": minterms,
+                    "dont_cares": dont_cares,
                 }
-            )
-        else:
+                tool_trace.append(
+                    {
+                        "tool": "extract_boolean_parameters (Gemini)",
+                        "input": {"prompt": user_prompt},
+                        "output": parsed,
+                    }
+                )
+            except Exception as e:
+                tool_trace.append(
+                    {
+                        "tool": "extract_boolean_parameters (Gemini fallback)",
+                        "error": str(e),
+                    }
+                )
+
+        if parsed is None:
             parsed = _parse_prompt_fallback(user_prompt)
             num_vars = parsed["num_vars"]
             minterms = parsed["minterms"]

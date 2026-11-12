@@ -65,7 +65,10 @@ export default function App() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ prompt: promptText }),
       });
-      if (!res.ok) throw new Error("Failed to parse prompt");
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.detail || "Failed to parse prompt");
+      }
       const data = await res.json();
       setNumVars(data.kmap.num_vars);
       setMinterms(data.kmap.minterms);
