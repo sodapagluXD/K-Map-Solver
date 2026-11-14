@@ -117,11 +117,13 @@ def run_kmap_agent(
         if GENAI_AVAILABLE and api_key:
             try:
                 client = genai.Client(api_key=api_key)
+                # Inside run_kmap_agent(), update the extraction instructions & parsing:
                 extract_resp = client.models.generate_content(
                     model="gemini-2.5-flash",
                     contents=(
-                        "Extract num_vars (2, 3, or 4), minterms (list of integers), and "
-                        f"dont_cares (list of integers, empty list if none) from: {user_prompt}"
+                        "Extract num_vars (2, 3, or 4), terms (list of integers), dont_cares (list of integers), "
+                        "and is_maxterm (true if the user specifies maxterms/POS, false if minterms/SOP) "
+                        f"from: {user_prompt}"
                     ),
                     config=types.GenerateContentConfig(
                         response_mime_type="application/json",
@@ -129,7 +131,7 @@ def run_kmap_agent(
                             type=types.Type.OBJECT,
                             properties={
                                 "num_vars": types.Schema(type=types.Type.INTEGER),
-                                "minterms": types.Schema(
+                                "terms": types.Schema(
                                     type=types.Type.ARRAY,
                                     items=types.Schema(type=types.Type.INTEGER),
                                 ),
@@ -137,22 +139,26 @@ def run_kmap_agent(
                                     type=types.Type.ARRAY,
                                     items=types.Schema(type=types.Type.INTEGER),
                                 ),
+                                "is_maxterm": types.Schema(type=types.Type.BOOLEAN),
                             },
-                            required=["num_vars", "minterms", "dont_cares"],
+                            required=["num_vars", "terms", "dont_cares", "is_maxterm"],
                         ),
                     ),
                 )
                 raw_parsed = json.loads(extract_resp.text)
                 if isinstance(raw_parsed, list) and raw_parsed:
                     raw_parsed = raw_parsed[0]
+
                 num_vars = max(2, min(4, int(raw_parsed.get("num_vars") or 4)))
-                minterms = [int(x) for x in (raw_parsed.get("minterms") or [])]
+                raw_terms = [int(x) for x in (raw_parsed.get("terms") or [])]
                 dont_cares = [int(x) for x in (raw_parsed.get("dont_cares") or [])]
-                parsed = {
-                    "num_vars": num_vars,
-                    "minterms": minterms,
-                    "dont_cares": dont_cares,
-                }
+                is_maxterm = bool(raw_parsed.get("is_maxterm", False))
+
+                if is_maxterm:
+                    excluded = set(raw_terms) | set(dont_cares)
+                    minterms = [i for i in range(1 << num_vars) if i not in excluded]
+                else:
+                    minterms = raw_terms
                 tool_trace.append(
                     {
                         "tool": "extract_boolean_parameters (Gemini)",
