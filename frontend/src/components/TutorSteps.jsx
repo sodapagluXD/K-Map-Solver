@@ -2,6 +2,8 @@ import React, { useState } from "react";
 
 export default function TutorSteps({
   result,
+  formMode = "SOP",
+  setFormMode,
   hoveredGroupId,
   setHoveredGroupId,
 }) {
@@ -11,20 +13,33 @@ export default function TutorSteps({
 
   const { kmap, grouping, verification, tutor_steps, agent_trace } = result;
   const vars = kmap.variables;
+  const activeGroups =
+    formMode === "SOP" ? grouping.groups : grouping.pos_groups || [];
 
   return (
     <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-lg space-y-5">
-      {/* Final Minimized Equation Banner */}
-      <div className="p-4 rounded-lg bg-gradient-to-r from-indigo-950 to-slate-900 border border-indigo-500/40">
+      {/* Final Minimized SOP & POS Banner */}
+      <div className="p-4 rounded-lg bg-gradient-to-r from-indigo-950 to-slate-900 border border-indigo-500/40 space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <div>
-            <p className="text-xs uppercase tracking-wider text-indigo-300 font-semibold">
-              Minimized Boolean Expression (SOP)
-            </p>
-            <p className="text-2xl font-mono font-bold text-white mt-1">
-              F({vars.join(", ")}) = {grouping.minimized_sop}
-            </p>
+          <div className="space-y-1.5">
+            <div>
+              <span className="text-[11px] uppercase tracking-wider text-emerald-300 font-semibold">
+                Minimized SOP (Sum of Products)
+              </span>
+              <p className="text-xl font-mono font-bold text-white">
+                F({vars.join(", ")}) = {grouping.minimized_sop}
+              </p>
+            </div>
+            <div>
+              <span className="text-[11px] uppercase tracking-wider text-amber-300 font-semibold">
+                Minimized POS (Product of Sums)
+              </span>
+              <p className="text-xl font-mono font-bold text-white">
+                F({vars.join(", ")}) = {grouping.minimized_pos}
+              </p>
+            </div>
           </div>
+
           <span
             className={`px-3 py-1 rounded-full text-xs font-semibold ${
               verification.all_passed
@@ -37,18 +52,43 @@ export default function TutorSteps({
               : "✗ Verification Mismatch"}
           </span>
         </div>
+
+        {/* Toggle K-Map Overlay Between SOP (1s) and POS (0s) */}
+        <div className="flex items-center gap-2 pt-2 border-t border-indigo-500/20">
+          <span className="text-xs text-slate-400">Map Overlay Mode:</span>
+          <button
+            onClick={() => setFormMode("SOP")}
+            className={`px-3 py-1 rounded-md text-xs font-semibold transition ${
+              formMode === "SOP"
+                ? "bg-emerald-600 text-white"
+                : "bg-slate-800 text-slate-300 hover:bg-slate-700"
+            }`}
+          >
+            SOP (Group 1s)
+          </button>
+          <button
+            onClick={() => setFormMode("POS")}
+            className={`px-3 py-1 rounded-md text-xs font-semibold transition ${
+              formMode === "POS"
+                ? "bg-amber-600 text-white"
+                : "bg-slate-800 text-slate-300 hover:bg-slate-700"
+            }`}
+          >
+            POS (Group 0s)
+          </button>
+        </div>
       </div>
 
       {/* Interactive Prime Implicant Group Pills */}
-      {grouping.groups.length > 0 && (
+      {activeGroups.length > 0 && (
         <div>
           <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">
-            Detected K-Map Groups (Hover to Highlight)
+            Detected {formMode} Groups ({formMode === "SOP" ? "1-Cells" : "0-Cells"}) — Hover to Highlight
           </h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-            {grouping.groups.map((g) => (
+            {activeGroups.map((g) => (
               <div
-                key={g.id}
+                key={`${formMode}-${g.id}`}
                 onMouseEnter={() => setHoveredGroupId(g.id)}
                 onMouseLeave={() => setHoveredGroupId(null)}
                 style={{
@@ -72,7 +112,7 @@ export default function TutorSteps({
                   </span>
                 </div>
                 <p className="text-xs text-slate-400 mt-1">
-                  Minterms:{" "}
+                  Cells:{" "}
                   <span className="font-mono text-slate-200">
                     {g.minterms.map((m) => `m${m}`).join(", ")}
                   </span>
@@ -94,6 +134,8 @@ export default function TutorSteps({
           </div>
         </div>
       )}
+
+      {/* Keep the rest of TutorSteps.jsx (Navigation Tabs & Tab 1/2/3 content) unchanged below */}
 
       {/* Navigation Tabs */}
       <div className="flex border-b border-slate-800 gap-4 text-sm">

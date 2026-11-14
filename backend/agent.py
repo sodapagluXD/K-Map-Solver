@@ -60,7 +60,7 @@ def build_tutor_walkthrough(
     step4 = (
         f"Exhaustive {verification['total_rows']}-row truth table verification "
         f"{'PASSED (100% match across all input combinations)' if verification['all_passed'] else 'FAILED'} "
-        f"for minimized SOP: F({vars_str}) = {grouping_data['minimized_sop']}."
+        f"for SOP: F = {grouping_data['minimized_sop']} and POS: F = {grouping_data['minimized_pos']}."
     )
 
     return {
@@ -73,12 +73,12 @@ def build_tutor_walkthrough(
             "step_3_elimination": step3,
             "step_4_verification": step4,
             "ai_tutor_summary": llm_narrative or (
-                f"To minimize F({vars_str}), we prioritized largest power-of-2 wrap-around blocks "
-                f"including Don't-Care cells only when they enlarged a group, yielding "
-                f"F = {grouping_data['minimized_sop']}."
+                f"Grouping 1s yields SOP: F = {grouping_data['minimized_sop']}, "
+                f"while grouping 0s yields POS: F = {grouping_data['minimized_pos']}."
             ),
         },
     }
+    
 
 
 def _parse_prompt_fallback(prompt: str) -> Dict[str, Any]:
@@ -214,12 +214,19 @@ def run_kmap_agent(
 
     # Step 3: Tool Call - Verify Truth Table (Self-Check)
     verification = verify_truth_table(
-        num_vars, minterms, dont_cares, grouping_data["minimized_sop"]
+        num_vars,
+        minterms,
+        dont_cares,
+        grouping_data["minimized_sop"],
+        grouping_data["minimized_pos"],
     )
     tool_trace.append(
         {
             "tool": "verify_truth_table",
-            "input": {"minimized_sop": grouping_data["minimized_sop"]},
+            "input": {
+                "minimized_sop": grouping_data["minimized_sop"],
+                "minimized_pos": grouping_data["minimized_pos"],
+            },
             "output": {
                 "all_passed": verification["all_passed"],
                 "checked_rows": verification["total_rows"],

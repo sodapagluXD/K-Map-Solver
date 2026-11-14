@@ -32,6 +32,7 @@ export default function App() {
   const [promptText, setPromptText] = useState("");
   const [result, setResult] = useState(null);
   const [hoveredGroupId, setHoveredGroupId] = useState(null);
+  const [formMode, setFormMode] = useState("SOP");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -214,25 +215,30 @@ export default function App() {
           </button>
         </div>
 
-        {/* Main Split Workspace */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-          <div className="lg:col-span-5">
-            <KMapGrid
-              kmap={result?.kmap}
-              groups={result?.grouping?.groups || []}
-              hoveredGroupId={hoveredGroupId}
-              onToggleCell={handleToggleCell}
-            />
-          </div>
-
-          <div className="lg:col-span-7">
-            <TutorSteps
-              result={result}
-              hoveredGroupId={hoveredGroupId}
-              setHoveredGroupId={setHoveredGroupId}
-            />
-          </div>
+        <div className="lg:col-span-5">
+          <KMapGrid
+            kmap={result?.kmap}
+            groups={
+              formMode === "SOP"
+                ? result?.grouping?.groups || []
+                : result?.grouping?.pos_groups || []
+            }
+            hoveredGroupId={hoveredGroupId}
+            onToggleCell={handleToggleCell}
+          />
         </div>
+
+        <div className="lg:col-span-7">
+          <TutorSteps
+            result={result}
+            formMode={formMode}
+            setFormMode={setFormMode}
+            hoveredGroupId={hoveredGroupId}
+            setHoveredGroupId={setHoveredGroupId}
+          />
+        </div>
+      </div>
       </div>
     </div>
   );
