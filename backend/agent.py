@@ -82,23 +82,38 @@ def build_tutor_walkthrough(
 
 
 def _parse_prompt_fallback(prompt: str) -> Dict[str, Any]:
-    """Regex fallback parser if GEMINI_API_KEY is not configured."""
-    var_match = re.search(r"(\d)\s*[- ]?var", prompt, re.IGNORECASE)
+    """Regex fallback parser supporting both minterms and maxterms."""
+    text = prompt.lower()
+    var_match = re.search(r"(\d)\s*[- ]?var", text)
     num_vars = int(var_match.group(1)) if var_match else 4
     num_vars = max(2, min(4, num_vars))
 
-    m_match = re.search(r"(?:minterms?|m)\s*[\(\[:=]?\s*([\d,\s]+)", prompt, re.IGNORECASE)
-    minterms = (
-        [int(x) for x in re.findall(r"\d+", m_match.group(1))] if m_match else [0, 1, 2, 5, 8, 9, 10]
-    )
+    is_maxterm = "maxterm" in text or "pos" in text
+    dc_split = re.split(r"don['’]?t[- ]?cares?", text, maxsplit=1)
+    main_part = dc_split[0]
+    dc_part = dc_split[1] if len(dc_split) > 1 else ""
 
-    d_match = re.search(r"(?:don'?t[- ]?cares?|d)\s*[\(\[:=]?\s*([\d,\s]+)", prompt, re.IGNORECASE)
-    dont_cares = [int(x) for x in re.findall(r"\d+", d_match.group(1))] if d_match else []
+    # Strip the variable-count phrase so "4 variable" isn't read as minterm 4
+    main_part = re.sub(r"\b[2-4]\s*[- ]?var\w*\b", "", main_part)
 
-    if max(minterms + dont_cares, default=0) >= (1 << num_vars):
-        num_vars = 4 if max(minterms + dont_cares) >= 8 else 3
+    raw_terms = [int(n) for n in re.findall(r"\d+", main_part)]
+    dont_cares = [int(n) for n in re.findall(r"\d+", dc_part)]
 
-    return {"num_vars": num_vars, "minterms": minterms, "dont_cares": dont_cares}
+    if not raw_terms and not is_maxterm:
+        raw_terms = [0, 1, 2, 5, 8, 9, 10]
+
+    if is_maxterm:
+        excluded = set(raw_terms) | set(dont_cares)
+        minterms = [i for i in range(1 << num_vars) if i not in excluded]
+    else:
+        minterms = raw_terms
+
+    return {
+        "num_vars": num_vars,
+        "minterms": minterms,
+        "dont_cares": dont_cares,
+        "is_maxterm": is_maxterm,
+    }
 
 
 def run_kmap_agent(
@@ -116,7 +131,10 @@ def run_kmap_agent(
         parsed = None
         if GENAI_AVAILABLE and api_key:
             try:
-                client = genai.Client(api_key=api_key)
+                client = genai.Client(
+                    api_key=api_key,
+                    http_options={"api_version": "v1beta"},
+                )
                 # Inside run_kmap_agent(), update the extraction instructions & parsing:
                 extract_resp = client.models.generate_content(
                     model="gemini-2.5-flash",
